@@ -1,0 +1,14 @@
+#!/usr/bin/env python3
+
+import sys
+
+print("Hello ", end="")
+if len(sys.argv) < 2:
+	print("World")
+else:
+	print(sys.argv[1])
+
+data = input()
+print("Your input: %s" % data)
+
+exit(0)
