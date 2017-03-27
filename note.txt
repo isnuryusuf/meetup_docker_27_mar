@@ -1,0 +1,190 @@
+# NOTE:
+# please understand the command before you execute it.
+#
+
+# compile hello
+cd ~/demo/hello
+gcc -o hello_1 -nostdlib hello_1.s
+gcc -o hello_2 hello_2.c
+
+# compile src
+cd ~/demo/src
+for file in *.c; do gcc -o ${file%.c} $file; done
+
+# add program in src to bin PATH
+cd ~/bin
+find ../demo/src -type f -executable -exec ln -sf {} . \;
+
+# add util to bin PATH
+cd ~/bin
+find ../demo/util -type f -executable -exec ln -sf {} . \;
+
+# make root_test base directory
+cd ~
+mkdir -p root_test/{{,usr/}{,s}bin,root}
+
+# copy program to root_test
+cd ~
+cpbin root_test bash cat cp echo id ip kill ln ls mkdir mount nc ping ps pwd rm sleep touch tree umount vim
+
+# chroot2 to root_test
+cd ~
+chroot2 root_test /bin/bash
+
+# try remove /
+rm -rf / --no-preserve-root
+
+# make test data_test dir
+cd ~
+mkdir -p data_test/{a,b}
+
+# create test file a
+cd ~
+echo test file a > data_test/a/AAAA.txt
+
+# create test file b
+cd ~
+echo test file a > data_test/b/BBBB.txt
+
+# create mnt_test dir
+cd ~
+mkdir -p mnt_test
+
+# make private mount
+mount --make-rprivate /
+
+# create new mount ns
+unshare2 m /bin/bash
+
+# mount data_test/a to mnt_test
+cd ~
+mount --bind data_test/a mnt_test
+
+# mount data_test/b to mnt_test
+cd ~
+mount --bind data_test/b mnt_test
+
+# create new pid ns
+unshare2 p /bin/bash
+
+# create sleep process
+sleep <second>
+
+# find sleep process
+ps -C sleep -F
+
+# kill sleep process
+kill <PID>
+
+# mount procfs
+mkdir -p /proc
+mount -t proc proc /proc
+
+# create new uts ns
+unshare2 u /bin/bash
+
+# get hostname
+hostname
+
+# set hostname
+hostname <NAME>
+
+# create new ipc ns
+unshare2 ipc /bin/bash
+
+# test write ipc
+shmem_test w <data>
+
+# test read ipc
+shmem_test r
+
+# listen in port 1234
+nc -lp 1234
+
+# enable ip forward
+echo 1 > /proc/sys/net/ipv4/ip_forward
+
+# create my_br bridge
+ip link add name my_br type bridge
+ip link set my_br up
+ip addr add 10.11.12.1/24 dev my_br
+
+# create veth link and connect one one endpoint to my_br
+ip link add name h1 type veth peer name c1
+ip link set h1 up master my_br
+
+# move another veth endpoint to namespace
+ip link set c1 netns <pid>
+
+# setup ip for network on namespace
+ip link set c1 up
+ip addr add 10.11.12.2/24 dev c1
+ip route add default via 10.11.12.1
+
+# setup iptable routing
+iptables -t nat -A POSTROUTING -s 10.11.12.0/24 -o enp0s3 -j MASQUERADE
+
+# create pid limit
+cd /sys/fs/cgroup/pids
+mkdir mylimit
+
+# set pid limit to 5
+cd /sys/fs/cgroup/pids/mylimit
+echo 5 > pids.max
+
+# move pid cgroup
+cd /sys/fs/cgroup/pids/mylimit
+echo <pid> > tasks
+
+# create cpuset limit
+cd /sys/fs/cgroup/cpuset
+mkdir mylimit
+
+# set cpuset to allow only use core 1
+cd /sys/fs/cgroup/cpuset/mylimit
+echo 1 > cpuset.cpus
+
+# move pid cgroup
+cd /sys/fs/cgroup/cpuset/mylimit
+echo <pid> > tasks
+
+# caplimit
+cd ~
+cap_limit chroot2 root_test /bin/bash
+
+# try to modify network
+ip link set lo down
+
+# create dir for overlayfs
+cd ~
+mkdir -p c{1,2}{,_diff,_work}
+
+# mount overlayfs
+cd ~
+mount -t overlay -olowerdir=root_test,upperdir=c1_diff,workdir=c1_work overlay c1
+mount -t overlay -olowerdir=root_test:c1_diff,upperdir=c2_diff,workdir=c2_work overlay c2
+
+# create alpine root filesystem
+cd ~
+mkdir -p alpine
+nc -lp 12345 -q 0 | tar -xC alpine
+
+
+# extract docker alpine image and copy to demo box
+docker create --name test-alpine alpine sh
+docker export test-alpine | nc 127.0.0.1 12345
+
+# create layer on alpine
+cd ~
+mkdir -p myweb{,_diff,_work}
+mount -t overlay -olowerdir=alpine,upperdir=myweb_diff,workdir=myweb_work overlay myweb
+
+# chroot into myweb
+unshare2 pim chroot2 myweb /bin/sh
+
+# setup dns
+echo nameserver 8.8.8.8 > /etc/resolv.conf
+
+# install nginx
+apk update
+apk add nginx
